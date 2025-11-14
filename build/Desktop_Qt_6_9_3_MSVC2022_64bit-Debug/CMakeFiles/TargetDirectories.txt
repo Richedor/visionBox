@@ -1,0 +1,8 @@
+D:/qtProjects/VisionBox/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/CMakeFiles/VisionBox.dir
+D:/qtProjects/VisionBox/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/CMakeFiles/edit_cache.dir
+D:/qtProjects/VisionBox/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/CMakeFiles/rebuild_cache.dir
+D:/qtProjects/VisionBox/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/CMakeFiles/list_install_components.dir
+D:/qtProjects/VisionBox/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/CMakeFiles/install.dir
+D:/qtProjects/VisionBox/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/CMakeFiles/install/local.dir
+D:/qtProjects/VisionBox/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/CMakeFiles/VisionBox_autogen_timestamp_deps.dir
+D:/qtProjects/VisionBox/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/CMakeFiles/VisionBox_autogen.dir
