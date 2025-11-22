@@ -1,5 +1,7 @@
 #include "webcamdialog.h"
 #include <QMessageBox>
+#include <QDebug>
+#include <QPixmap>
 
 WebcamDialog::WebcamDialog(QWidget *parent)
     : QDialog(parent)
@@ -7,53 +9,139 @@ WebcamDialog::WebcamDialog(QWidget *parent)
     this->setWindowTitle("Webcam");
     this->resize(640, 480);
 
-    // widget d'affichage vidéo
-    m_view = new QVideoWidget(this);
+    // Zone d'affichage vidéo (remplace QVideoWidget)
+    m_view = new QLabel(this);
+    m_view->setAlignment(Qt::AlignCenter);
+    m_view->setMinimumSize(320, 240);
+    m_view->setStyleSheet("background-color: black;");
 
-    // bouton capturer
+    // Bouton capturer
     m_btnCapture = new QPushButton("Capturer", this);
 
-    // layout
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->addWidget(m_view, 1);
-    layout->addWidget(m_btnCapture, 0);
-    setLayout(layout);
+    // Layout
+    m_layout = new QVBoxLayout(this);
+    m_layout->addWidget(m_view, 1);
+    m_layout->addWidget(m_btnCapture, 0);
+    setLayout(m_layout);
 
-    // caméra par défaut
-    m_camera = new QCamera(this);
-    m_captureSession.setCamera(m_camera);
-    m_captureSession.setVideoOutput(m_view);
+    // Ouvrir la webcam par défaut (index 0)
+    if (!m_cap.open(0)) {
+        QMessageBox::warning(this,
+                             "Erreur webcam",
+                             "Impossible d'ouvrir la webcam (index 0).");
+        m_btnCapture->setEnabled(false);
+        return;
+    }
 
-    // module de capture
-    m_imageCapture = new QImageCapture(this);
-    m_captureSession.setImageCapture(m_imageCapture);
+    // Timer pour rafraîchir les images ~30 FPS
+    connect(&m_timer, &QTimer::timeout,
+            this, &WebcamDialog::updateFrame);
+    m_timer.start(30);
 
-    // connect signals
+    // Clic sur "Capturer"
     connect(m_btnCapture, &QPushButton::clicked,
             this, &WebcamDialog::onCaptureClicked);
-
-    connect(m_imageCapture, &QImageCapture::imageCaptured,
-            this, &WebcamDialog::onImageCaptured);
-
-    // démarrer la webcam
-    m_camera->start();
 }
 
 WebcamDialog::~WebcamDialog()
 {
-    if (m_camera)
-        m_camera->stop();
+    m_timer.stop();
+
+    if (m_cap.isOpened()) {
+        m_cap.release();
+    }
+}
+
+void WebcamDialog::updateFrame()
+{
+    cv::Mat frame;
+    m_cap >> frame;  // lire une nouvelle frame
+
+    if (frame.empty()) {
+        return;
+    }
+
+    // On garde la dernière frame pour la capture
+    m_lastFrame = frame.clone();
+
+    // Conversion en QImage et affichage
+    QImage img = matToQImage(m_lastFrame);
+    if (!img.isNull()) {
+        m_view->setPixmap(QPixmap::fromImage(img).scaled(
+            m_view->size(),
+            Qt::KeepAspectRatio,
+            Qt::SmoothTransformation
+            ));
+    }
 }
 
 void WebcamDialog::onCaptureClicked()
 {
-    if (m_imageCapture && m_imageCapture->isReadyForCapture()) {
-        m_imageCapture->capture();
+    if (m_lastFrame.empty()) {
+        QMessageBox::information(this,
+                                 "Capture",
+                                 "Aucune image disponible à capturer.");
+        return;
     }
+
+    QImage img = matToQImage(m_lastFrame);
+    if (img.isNull()) {
+        QMessageBox::warning(this,
+                             "Capture",
+                             "Échec de la conversion de l'image.");
+        return;
+    }
+
+    // On envoie l'image au MainWindow (comme avant)
+    emit imageCaptured(img);
+
+    // On ferme la fenêtre après capture
+    this->accept();
 }
 
-void WebcamDialog::onImageCaptured(int, const QImage &img)
+QImage WebcamDialog::matToQImage(const cv::Mat &mat)
 {
-    emit imageCaptured(img);  // envoyer au MainWindow
-    this->accept();           // fermer la fenêtre
+    if (mat.empty())
+        return QImage();
+
+    QImage image;
+
+    switch (mat.type()) {
+    case CV_8UC3: {
+        // BGR -> RGB
+        cv::Mat rgb;
+        cv::cvtColor(mat, rgb, cv::COLOR_BGR2RGB);
+        image = QImage(rgb.data,
+                       rgb.cols,
+                       rgb.rows,
+                       rgb.step,
+                       QImage::Format_RGB888).copy();
+        break;
+    }
+    case CV_8UC4: {
+        // BGRA -> RGBA
+        cv::Mat rgba;
+        cv::cvtColor(mat, rgba, cv::COLOR_BGRA2RGBA);
+        image = QImage(rgba.data,
+                       rgba.cols,
+                       rgba.rows,
+                       rgba.step,
+                       QImage::Format_RGBA8888).copy();
+        break;
+    }
+    case CV_8UC1: {
+        // Niveaux de gris
+        image = QImage(mat.data,
+                       mat.cols,
+                       mat.rows,
+                       mat.step,
+                       QImage::Format_Grayscale8).copy();
+        break;
+    }
+    default:
+        qWarning() << "matToQImage: type non supporté:" << mat.type();
+        break;
+    }
+
+    return image;
 }

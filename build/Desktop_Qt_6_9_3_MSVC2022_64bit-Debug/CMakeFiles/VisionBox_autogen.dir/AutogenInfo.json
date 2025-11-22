@@ -458,6 +458,13 @@
 		"C:/Qt/6.9.3/msvc2022_64/lib/cmake/Qt6/QtPublicWindowsHelpers.cmake",
 		"C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CMakeFindDependencyMacro.cmake",
 		"C:/Qt/6.9.3/msvc2022_64/lib/cmake/Qt6/Qt6Dependencies.cmake",
+		"D:/opencv/build/x64/vc16/lib/OpenCVConfig-version.cmake",
+		"D:/opencv/build/x64/vc16/lib/OpenCVConfig.cmake",
+		"C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/FindPackageHandleStandardArgs.cmake",
+		"C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/FindPackageMessage.cmake",
+		"D:/opencv/build/x64/vc16/lib/OpenCVModules.cmake",
+		"D:/opencv/build/x64/vc16/lib/OpenCVModules-debug.cmake",
+		"D:/opencv/build/x64/vc16/lib/OpenCVModules-release.cmake",
 		"C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/GNUInstallDirs.cmake",
 		"D:/qtProjects/VisionBox/resources.qrc"
 	],
@@ -492,15 +499,51 @@
 			null
 		],
 		[
-			"D:/qtProjects/VisionBox/traitement_flou.h",
+			"D:/qtProjects/VisionBox/traitements/adaptateurs_qt/adaptateur_contours.h",
 			"MU",
-			"EWIEGA46WW/moc_traitement_flou.cpp",
+			"KPO27DWSFY/moc_adaptateur_contours.cpp",
 			null
 		],
 		[
-			"D:/qtProjects/VisionBox/traitement_image.h",
+			"D:/qtProjects/VisionBox/traitements/adaptateurs_qt/adaptateur_flou.h",
 			"MU",
-			"EWIEGA46WW/moc_traitement_image.cpp",
+			"KPO27DWSFY/moc_adaptateur_flou.cpp",
+			null
+		],
+		[
+			"D:/qtProjects/VisionBox/traitements/adaptateurs_qt/adaptateur_mosaique.h",
+			"MU",
+			"KPO27DWSFY/moc_adaptateur_mosaique.cpp",
+			null
+		],
+		[
+			"D:/qtProjects/VisionBox/traitements/adaptateurs_qt/traitement_image.h",
+			"MU",
+			"KPO27DWSFY/moc_traitement_image.cpp",
+			null
+		],
+		[
+			"D:/qtProjects/VisionBox/traitements/core/contours.h",
+			"MU",
+			"A4C6NFWCT4/moc_contours.cpp",
+			null
+		],
+		[
+			"D:/qtProjects/VisionBox/traitements/core/flou.h",
+			"MU",
+			"A4C6NFWCT4/moc_flou.cpp",
+			null
+		],
+		[
+			"D:/qtProjects/VisionBox/traitements/core/mosaique.h",
+			"MU",
+			"A4C6NFWCT4/moc_mosaique.cpp",
+			null
+		],
+		[
+			"D:/qtProjects/VisionBox/traitements/traitement_factory.h",
+			"MU",
+			"JV2Q46ZWGH/moc_traitement_factory.cpp",
 			null
 		],
 		[
@@ -537,6 +580,7 @@
 	],
 	"MOC_INCLUDES" : 
 	[
+		"D:/opencv/build/include",
 		"C:/Qt/6.9.3/msvc2022_64/include/QtCore",
 		"C:/Qt/6.9.3/msvc2022_64/include",
 		"C:/Qt/6.9.3/msvc2022_64/mkspecs/win32-msvc",
@@ -575,7 +619,24 @@
 		[ "D:/qtProjects/VisionBox/main.cpp", "MU", null ],
 		[ "D:/qtProjects/VisionBox/mainwindow.cpp", "MU", null ],
 		[ "D:/qtProjects/VisionBox/panneau_flux_traitements.cpp", "MU", null ],
-		[ "D:/qtProjects/VisionBox/traitement_flou.cpp", "MU", null ],
+		[
+			"D:/qtProjects/VisionBox/traitements/adaptateurs_qt/adaptateur_contours.cpp",
+			"MU",
+			null
+		],
+		[
+			"D:/qtProjects/VisionBox/traitements/adaptateurs_qt/adaptateur_flou.cpp",
+			"MU",
+			null
+		],
+		[
+			"D:/qtProjects/VisionBox/traitements/adaptateurs_qt/adaptateur_mosaique.cpp",
+			"MU",
+			null
+		],
+		[ "D:/qtProjects/VisionBox/traitements/core/contours.cpp", "MU", null ],
+		[ "D:/qtProjects/VisionBox/traitements/core/flou.cpp", "MU", null ],
+		[ "D:/qtProjects/VisionBox/traitements/core/mosaique.cpp", "MU", null ],
 		[ "D:/qtProjects/VisionBox/webcamdialog.cpp", "MU", null ]
 	],
 	"UIC_OPTIONS" : [],

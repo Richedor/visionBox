@@ -3,6 +3,6 @@
 #include "EWIEGA46WW/moc_clickablelabel.cpp"
 #include "EWIEGA46WW/moc_mainwindow.cpp"
 #include "EWIEGA46WW/moc_panneau_flux_traitements.cpp"
-#include "EWIEGA46WW/moc_traitement_flou.cpp"
-#include "EWIEGA46WW/moc_traitement_image.cpp"
+#include "KPO27DWSFY/moc_adaptateur_flou.cpp"
+#include "KPO27DWSFY/moc_traitement_image.cpp"
 #include "EWIEGA46WW/moc_webcamdialog.cpp"

@@ -7,6 +7,7 @@
 *****************************************************************************/
 
 #include "../../../../webcamdialog.h"
+#include <QtGui/qtextcursor.h>
 #include <QtCore/qmetatype.h>
 
 #include <QtCore/qtmochelpers.h>
@@ -43,9 +44,7 @@ template <> constexpr inline auto WebcamDialog::qt_create_metaobjectdata<qt_meta
         "",
         "image",
         "onCaptureClicked",
-        "onImageCaptured",
-        "id",
-        "img"
+        "updateFrame"
     };
 
     QtMocHelpers::UintData qt_methods {
@@ -55,10 +54,8 @@ template <> constexpr inline auto WebcamDialog::qt_create_metaobjectdata<qt_meta
         }}),
         // Slot 'onCaptureClicked'
         QtMocHelpers::SlotData<void()>(4, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'onImageCaptured'
-        QtMocHelpers::SlotData<void(int, const QImage &)>(5, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::Int, 6 }, { QMetaType::QImage, 7 },
-        }}),
+        // Slot 'updateFrame'
+        QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -84,7 +81,7 @@ void WebcamDialog::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id
         switch (_id) {
         case 0: _t->imageCaptured((*reinterpret_cast< std::add_pointer_t<QImage>>(_a[1]))); break;
         case 1: _t->onCaptureClicked(); break;
-        case 2: _t->onImageCaptured((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<QImage>>(_a[2]))); break;
+        case 2: _t->updateFrame(); break;
         default: ;
         }
     }

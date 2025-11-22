@@ -1,5 +1,5 @@
 #include "boite_traitement.h"
-#include "traitement_image.h"
+#include "traitements/adaptateurs_qt/traitement_image.h"
 
 #include <QVBoxLayout>
 #include <QMouseEvent>

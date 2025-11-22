@@ -21,9 +21,27 @@
 
 #include <QScrollArea>
 
-#include "traitement_flou.h"
+#include <opencv2/opencv.hpp>
+
+#include "traitements/adaptateurs_qt/traitement_image.h"
+#include "traitements/adaptateurs_qt/adaptateur_flou.h"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QDir>
+#include <QFile>
+#include <QDateTime>
+
+#include "traitements/traitement_factory.h"
 
 
+// plus tard :
+// #include "traitements/adaptateurs_qt/adaptateur_mosaique.h"
+// #include "traitements/adaptateurs_qt/adaptateur_contours.h"
+
+
+using namespace cv;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -31,8 +49,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // Création du traitement flou réel
-    m_traitementFlou = new TraitementFlou(this);
+    m_typeAcquisition.clear();
+    m_cheminSource.clear();
 
 
     initialiserPageAffichage();
@@ -48,9 +66,8 @@ MainWindow::MainWindow(QWidget *parent)
     // Connexion clic "Webcam"
     connect(ui->labelWebcam, &ClickableLabel::clicked,
             this, &MainWindow::onWebcamClicked);
-
-    // (Tu pourras plus tard connecter labelVideo ici si besoin)
 }
+
 
 MainWindow::~MainWindow()
 {
@@ -71,19 +88,40 @@ void MainWindow::onImageClicked()
     if (fileName.isEmpty())
         return; // utilisateur a annulé
 
-    QPixmap pix(fileName);
-    if (pix.isNull()) {
+    // 1) Charger l'image avec OpenCV (en BGR)
+    m_imageCourante = cv::imread(fileName.toStdString(), cv::IMREAD_COLOR);
+
+    if (m_imageCourante.empty()) {
         QMessageBox::warning(this, tr("Erreur"),
-                             tr("Impossible de charger l'image."));
+                             tr("Impossible de charger l'image avec OpenCV."));
         return;
     }
+
+    // 2) Convertir en QImage pour l'affichage
+    QImage qimg = matToQImage(m_imageCourante);
+    if (qimg.isNull()) {
+        QMessageBox::warning(this, tr("Erreur"),
+                             tr("Conversion OpenCV -> QImage échouée."));
+        return;
+    }
+
+    //  Infos acquisition pour le log
+    m_typeAcquisition = "image_fichier";
+    m_cheminSource    = fileName;
+    mettreAJourLogsTexte();
+
+
+    // On mémorise l'image originale comme source du pipeline
+    m_imageSource = qimg;
 
     // Passage à la page d'affichage
     ui->stackedWidget->setCurrentWidget(ui->page_2_Display);
 
+    QPixmap pix = QPixmap::fromImage(qimg);
     afficherImageDansPreview(pix);
-
 }
+
+
 
 // -----------------  CLIC SUR "WEBCAM"  -----------------
 
@@ -102,19 +140,94 @@ void MainWindow::onWebcamClicked()
 
 void MainWindow::onWebcamImageReady(const QImage &img)
 {
-    QPixmap pix = QPixmap::fromImage(img);
-
-    if (pix.isNull()) {
+    if (img.isNull()) {
         QMessageBox::warning(this, tr("Erreur"),
                              tr("Image webcam invalide."));
         return;
     }
 
+    // 1) Stocker en Mat pour les traitements OpenCV
+    m_imageCourante = qImageToMat(img);
+    if (m_imageCourante.empty()) {
+        QMessageBox::warning(this, tr("Erreur"),
+                             tr("Conversion QImage -> OpenCV échouée."));
+        return;
+    }
+
+    //  On mémorise l'image originale comme source du pipeline
+    m_imageSource = img;
+
+    // Infos acquisition pour le log
+    m_typeAcquisition = "webcam";
+    m_cheminSource.clear();
+    mettreAJourLogsTexte();
+
+
+    // 2) Affichage dans la page d'aperçu
     ui->stackedWidget->setCurrentWidget(ui->page_2_Display);
 
+    QPixmap pix = QPixmap::fromImage(img);
     afficherImageDansPreview(pix);
-
 }
+
+
+
+// -----------------  CONVERSIONS OpenCV <-> Qt  -----------------
+
+QImage MainWindow::matToQImage(const cv::Mat &mat)
+{
+    if (mat.empty())
+        return QImage();
+
+    switch (mat.type()) {
+    case CV_8UC3: {
+        cv::Mat rgb;
+        cv::cvtColor(mat, rgb, cv::COLOR_BGR2RGB);
+        return QImage(rgb.data,
+                      rgb.cols,
+                      rgb.rows,
+                      rgb.step,
+                      QImage::Format_RGB888).copy();
+    }
+    case CV_8UC4: {
+        cv::Mat rgba;
+        cv::cvtColor(mat, rgba, cv::COLOR_BGRA2RGBA);
+        return QImage(rgba.data,
+                      rgba.cols,
+                      rgba.rows,
+                      rgba.step,
+                      QImage::Format_RGBA8888).copy();
+    }
+    case CV_8UC1: {
+        return QImage(mat.data,
+                      mat.cols,
+                      mat.rows,
+                      mat.step,
+                      QImage::Format_Grayscale8).copy();
+    }
+    default:
+        // type non géré
+        return QImage();
+    }
+}
+
+cv::Mat MainWindow::qImageToMat(const QImage &image)
+{
+    // On force en RGBA 8 bits
+    QImage img = image.convertToFormat(QImage::Format_RGBA8888);
+
+    cv::Mat mat(img.height(),
+                img.width(),
+                CV_8UC4,
+                const_cast<uchar*>(img.bits()),
+                img.bytesPerLine());
+
+    cv::Mat matBGR;
+    cv::cvtColor(mat, matBGR, cv::COLOR_RGBA2BGR);
+
+    return matBGR.clone(); // clone => buffer indépendant
+}
+
 
 
 
@@ -188,7 +301,6 @@ void MainWindow::initialiserPageAffichage()
     dispositionPrincipale->addWidget(panneauGauche);
 
 
-    // =========================
     // 2) PANNEAU CENTRAL  (doit être le plus grand)
     // =========================
     QFrame *panneauCentre = new QFrame(page);
@@ -203,10 +315,26 @@ void MainWindow::initialiserPageAffichage()
     layoutGraphe->setContentsMargins(0, 0, 0, 0);
     layoutGraphe->setSpacing(0);
 
-    m_panneauFlux = new PanneauFluxTraitements(zoneGraphe);
-    layoutGraphe->addWidget(m_panneauFlux);   // <--- les boites s’afficheront ici
+    // --- ScrollArea pour les boîtes de traitements ---
+    QScrollArea *scrollFlux = new QScrollArea(zoneGraphe);
+    scrollFlux->setObjectName("scrollFluxTraitements");
+    scrollFlux->setFrameShape(QFrame::NoFrame);
+    // on laisse le widget décider de sa largeur -> permet le scroll horizontal
+    scrollFlux->setWidgetResizable(false);
+    scrollFlux->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollFlux->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
+    // Le vrai panneau qui contient les boîtes
+    m_panneauFlux = new PanneauFluxTraitements();
+    scrollFlux->setWidget(m_panneauFlux);
+
+    // On met la scrollArea dans la zone graphe
+    layoutGraphe->addWidget(scrollFlux);
+
+    // La zone graphe prend la plus grande partie du panneau central
     dispositionPanneauCentre->addWidget(zoneGraphe, 4);
+
+
 
 
     // Label "Barre de traitement"
@@ -256,23 +384,48 @@ void MainWindow::initialiserPageAffichage()
     QTextEdit *zoneLogs = new QTextEdit(panneauDroite);
     zoneLogs->setObjectName("zoneLogs");
     zoneLogs->setReadOnly(true);
+
+    //  couleur du texte + fond
+    zoneLogs->setStyleSheet(
+        "QTextEdit#zoneLogs {"
+        "  background-color: #FFF7F9;"   // ton fond rose pâle actuel
+        "  color: #5B2A0C;"              // marron (même ton que les boutons/menu)"
+        "  border: none;"
+        "}"
+        );
+
+
+    zoneLogs->setReadOnly(true);
     dispositionPanneauDroite->addWidget(zoneLogs);
 
-    // Aperçu : on réutilise ton labelPreview mais on EMPÊCHE qu’il élargisse toute la colonne
+    // ... après avoir ajouté le labelPreview (apercu)
     QLabel *apercu = ui->labelPreview;
     apercu->setParent(panneauDroite);
     apercu->setMinimumHeight(140);
-    apercu->setMaximumHeight(260);                 // <-- pour éviter la grosse saucisse verticale
+    apercu->setMaximumHeight(260);
     apercu->setAlignment(Qt::AlignCenter);
-    apercu->setSizePolicy(QSizePolicy::Expanding,  // <-- il peut rétrécir en largeur
-                          QSizePolicy::Expanding);
+    apercu->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     dispositionPanneauDroite->addWidget(apercu);
 
-    QPushButton *boutonExporter = new QPushButton("Exporter le résultat", panneauDroite);
+    // Bouton pour exporter la session (image + log)
+    QPushButton *boutonExporterSession =
+        new QPushButton(tr("Exporter la session (image + log)"), panneauDroite);
+    boutonExporterSession->setObjectName("boutonExporterSession");
+    // même style que les autres boutons → on ne touche PAS au style ici
+    boutonExporterSession->setCursor(Qt::PointingHandCursor);
+    boutonExporterSession->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    dispositionPanneauDroite->addWidget(boutonExporterSession);
+
+    // Bouton existant : exporter uniquement l'image finale
+    QPushButton *boutonExporter =
+        new QPushButton(tr("Exporter l'image finale"), panneauDroite);
     boutonExporter->setObjectName("boutonExporter");
     boutonExporter->setCursor(Qt::PointingHandCursor);
     boutonExporter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     dispositionPanneauDroite->addWidget(boutonExporter);
+
+
+
 
     // On limite aussi la largeur de la colonne droite pour laisser respirer le centre
     panneauDroite->setMinimumWidth(260);
@@ -293,6 +446,36 @@ void MainWindow::initialiserPageAffichage()
     dispositionPanneauDroite->setStretch(1, 2);
     dispositionPanneauDroite->setStretch(2, 3);
     dispositionPanneauDroite->setStretch(3, 0);
+
+    if (auto *btnImg = panneauDroite->findChild<QPushButton*>("boutonExporter")) {
+        connect(btnImg, &QPushButton::clicked,
+                this, &MainWindow::exporterImageFinale);
+    }
+
+    if (auto *btnSession = panneauDroite->findChild<QPushButton*>("boutonExporterSession")) {
+        connect(btnSession, &QPushButton::clicked,
+                this, &MainWindow::exporterSessionComplete);
+    }
+
+    QPushButton *btnImporter = new QPushButton(tr("Importer une session"), panneauDroite);
+    btnImporter->setObjectName("boutonImporterSession");
+    btnImporter->setCursor(Qt::PointingHandCursor);
+    btnImporter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    dispositionPanneauDroite->addWidget(btnImporter);
+
+    connect(btnImporter, &QPushButton::clicked, this, [this] {
+        QString fichier = QFileDialog::getOpenFileName(
+            this,
+            tr("Ouvrir un log de session"),
+            QString(),
+            tr("Fichiers JSON (*.json)")
+            );
+        if (!fichier.isEmpty()) {
+            this->importerSessionDepuisJSON(fichier);
+        }
+    });
+
+
 }
 
 
@@ -383,7 +566,29 @@ void MainWindow::ajouterTraitementDansBarre(const QString &nom)
     EntreeBarreTraitement entree;
     entree.nom = nom;
     entree.widgetBarre = wrapper;
+
+    // On crée une nouvelle instance de traitement pour CETTE entrée
+    TraitementImage *traitement = nullptr;
+
+    if (nom == "Flou") {
+        traitement = new AdaptateurFlou(this);
+    }
+    // plus tard :
+    // else if (nom == "Mosaïque") {
+    //     traitement = new AdaptateurMosaique(this);
+    // } else if (nom == "Contours") {
+    //     traitement = new AdaptateurContours(this);
+    // }
+
+    entree.traitement = traitement;
     m_listeBarreTraitements.append(entree);
+
+    // Si ce traitement a des paramètres qui changent,
+    // on recalcule automatiquement l'image finale
+    if (traitement) {
+        connect(traitement, &TraitementImage::parametresModifies,
+                this, &MainWindow::mettreAJourImageApresPipeline);
+    }
 
     // ----------------------------
     // Suppression propre
@@ -418,40 +623,26 @@ void MainWindow::ajouterTraitementDansBarre(const QString &nom)
 
 void MainWindow::mettreAJourFluxDepuisBarre()
 {
-    // Si le panneau n'existe pas encore, on ne fait rien
     if (!m_panneauFlux)
         return;
 
-    // Construire la liste de traitements dans l'ordre de la barre
     QList<TraitementImage*> listeTraitements;
 
-    for (int i = 0; i < m_listeBarreTraitements.size(); ++i) {
-        const EntreeBarreTraitement &entree = m_listeBarreTraitements[i];
-
-        // On mappe le nom affiché dans la barre vers l'objet traitement
-        if (entree.nom == "Mosaïque" && m_traitementMosaique) {
-            listeTraitements << m_traitementMosaique;
-        } else if (entree.nom == "Flou" && m_traitementFlou) {
-            listeTraitements << m_traitementFlou;
-        } else if (entree.nom == "Contours" && m_traitementContours) {
-            listeTraitements << m_traitementContours;
+    for (const EntreeBarreTraitement &entree : std::as_const(m_listeBarreTraitements)) {
+        if (entree.traitement) {
+            listeTraitements << entree.traitement;
         }
-        // Ici tu pourras rajouter d'autres :
-        // else if (entree.nom == "Niveaux de gris" && m_traitementGris) { ... }
     }
 
-    // Image source pour générer les aperçus des boîtes
-    QImage imageSource;
-    if (!m_lastPreview.isNull()) {
+    // Image source pour les aperçus
+    QImage imageSource = m_imageSource;
+    if (imageSource.isNull() && !m_lastPreview.isNull()) {
         imageSource = m_lastPreview.toImage();
     }
 
-    // On demande au panneau de se reconstruire (boîtes + flèches)
     m_panneauFlux->definirOrdreTraitements(listeTraitements, imageSource);
-
-    // Après avoir mis à jour les boites, on recalcule aussi l'image finale
     mettreAJourImageApresPipeline();
-
+    mettreAJourLogsTexte();
 }
 
 
@@ -465,21 +656,13 @@ QImage MainWindow::executerPipeline(const QImage &imageSource)
 
     // On applique chaque traitement dans l'ordre de la barre
     for (const EntreeBarreTraitement &entree : std::as_const(m_listeBarreTraitements)) {
-        TraitementImage *t = nullptr;
 
-        if (entree.nom == "Mosaïque") {
-            t = m_traitementMosaique;
-        } else if (entree.nom == "Flou") {
-            t = m_traitementFlou;
-        } else if (entree.nom == "Contours") {
-            t = m_traitementContours;
-        }
+        TraitementImage *t = entree.traitement;  // 🔹 instance propre à CETTE entrée
 
         if (!t)
             continue;
 
-        // 👉 ici on utilise TOUJOURS l'image précédente comme entrée
-        // Pour l'instant on ne passe pas encore de paramètres (QVariantMap vide)
+        // On enchaîne l'image au travers des traitements
         image = t->appliquer(image, QVariantMap());
     }
 
@@ -490,14 +673,16 @@ QImage MainWindow::executerPipeline(const QImage &imageSource)
 
 
 
+
 void MainWindow::mettreAJourImageApresPipeline()
 {
-    if (m_lastPreview.isNull()) {
-        return; // pas encore d'image source
+    // On doit avoir une vraie image source (originale)
+    if (m_imageSource.isNull()) {
+        return;
     }
 
-    // Image d'entrée = dernière image chargée / capturée
-    QImage source = m_lastPreview.toImage();
+    // Image d'entrée = image originale (sans traitements)
+    QImage source = m_imageSource;
 
     // On lance le pipeline en chaîne
     QImage resultat = executerPipeline(source);
@@ -505,13 +690,212 @@ void MainWindow::mettreAJourImageApresPipeline()
     if (!resultat.isNull()) {
         afficherImageDansPreview(QPixmap::fromImage(resultat));
     } else {
-        // Si le pipeline renvoie vide (pas de traitements), on affiche l'image brute
-        afficherImageDansPreview(m_lastPreview);
+        // Si le pipeline ne renvoie rien (aucun traitement actif),
+        // on réaffiche l'image originale
+        afficherImageDansPreview(QPixmap::fromImage(m_imageSource));
     }
 }
 
 
+void MainWindow::mettreAJourLogsTexte()
+{
+    QTextEdit *zoneLogs = findChild<QTextEdit*>("zoneLogs");
+    if (!zoneLogs)
+        return;
 
+    QStringList lignes;
+
+    // Infos acquisition
+    lignes << "Acquisition :";
+    if (m_typeAcquisition.isEmpty()) {
+        lignes << "  (aucune image chargée)";
+    } else {
+        lignes << "  Type   : " + m_typeAcquisition;
+        if (!m_cheminSource.isEmpty())
+            lignes << "  Source : " + m_cheminSource;
+    }
+
+    lignes << "";
+    lignes << "Pipeline de traitements :";
+
+    if (m_listeBarreTraitements.isEmpty()) {
+        lignes << "  (aucun traitement)";
+    } else {
+        int index = 1;
+        for (const EntreeBarreTraitement &entree : std::as_const(m_listeBarreTraitements)) {
+            lignes << QString("  %1. %2").arg(index++).arg(entree.nom);
+        }
+    }
+
+    zoneLogs->setPlainText(lignes.join("\n"));
+}
+
+
+void MainWindow::exporterImageFinale()
+{
+    if (m_lastPreview.isNull()) {
+        QMessageBox::warning(this, tr("Export image"),
+                             tr("Aucune image finale à exporter."));
+        return;
+    }
+
+    QString fileName = QFileDialog::getSaveFileName(
+        this,
+        tr("Exporter l'image finale"),
+        "resultat.png",
+        tr("Images (*.png *.jpg *.jpeg *.bmp)")
+        );
+
+    if (fileName.isEmpty())
+        return;
+
+    QImage img = m_lastPreview.toImage();
+    if (!img.save(fileName)) {
+        QMessageBox::warning(this, tr("Export image"),
+                             tr("Impossible d'enregistrer l'image."));
+    }
+}
+
+
+void MainWindow::exporterSessionComplete()
+{
+    if (m_lastPreview.isNull() && m_imageSource.isNull()) {
+        QMessageBox::warning(this, tr("Export session"),
+                             tr("Aucune image à exporter."));
+        return;
+    }
+
+    QString baseDir = QFileDialog::getExistingDirectory(
+        this,
+        tr("Choisir un dossier pour l'export")
+        );
+
+    if (baseDir.isEmpty())
+        return;
+
+    QDateTime now = QDateTime::currentDateTime();
+    QString folderName = now.toString("yyyyMMdd_HHmmss");
+    QDir dir(baseDir);
+    if (!dir.mkdir(folderName)) {
+        QMessageBox::warning(this, tr("Export session"),
+                             tr("Impossible de créer le dossier d'export."));
+        return;
+    }
+    dir.cd(folderName);
+
+    // 1) Sauver l'image finale
+    QImage imgFinale = m_lastPreview.isNull()
+                           ? m_imageSource
+                           : m_lastPreview.toImage();
+
+    QString imageFilePath = dir.filePath("resultat.png");
+    imgFinale.save(imageFilePath);
+
+    // 2) Construire le JSON minimal avec acquisition + pipeline
+    QJsonObject root;
+    root["version"] = "1.0";
+    root["date"] = now.toString(Qt::ISODate);
+
+    QJsonObject acq;
+    acq["type"] = m_typeAcquisition;
+    acq["source"] = m_cheminSource;
+    root["acquisition"] = acq;
+
+    QJsonObject res;
+    res["image_finale"] = imageFilePath;
+    root["resultat"] = res;
+
+    QJsonArray pipelineArray;
+    for (const EntreeBarreTraitement &entree : std::as_const(m_listeBarreTraitements)) {
+        TraitementImage *t = entree.traitement;
+        if (!t)
+            continue;
+
+        QJsonObject tjson;
+        tjson["id"]  = t->idTraitement();  // ex: "flou_gaussien"
+        tjson["nom"] = entree.nom;         // ex: "Flou"
+
+        QVariantMap params = t->lireParametresCourants();
+        QJsonObject paramsJson;
+        for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+            paramsJson[it.key()] = QJsonValue::fromVariant(it.value());
+        }
+        tjson["params"] = paramsJson;
+
+        pipelineArray.append(tjson);
+    }
+    root["pipeline"] = pipelineArray;
+
+    QJsonDocument doc(root);
+    QString jsonPath = dir.filePath("log.json");
+    QFile f(jsonPath);
+    if (f.open(QIODevice::WriteOnly)) {
+        f.write(doc.toJson(QJsonDocument::Indented));
+        f.close();
+    }
+
+    QMessageBox::information(
+        this,
+        tr("Export session"),
+        tr("Session exportée dans :\n%1").arg(dir.absolutePath())
+        );
+}
+
+
+void MainWindow::importerSessionDepuisJSON(const QString &fichier)
+{
+    QFile f(fichier);
+    if (!f.open(QIODevice::ReadOnly)) {
+        QMessageBox::warning(this, tr("Import session"),
+                             tr("Impossible d'ouvrir le fichier : %1").arg(fichier));
+        return;
+    }
+
+    QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    QJsonObject root = doc.object();
+
+    // On lit le pipeline
+    QJsonArray pipelineArray = root["pipeline"].toArray();
+
+    // 1) Vider la barre de traitement actuelle (UI + modèle)
+    for (const EntreeBarreTraitement &entree : std::as_const(m_listeBarreTraitements)) {
+        if (entree.widgetBarre)
+            entree.widgetBarre->deleteLater();
+    }
+    m_listeBarreTraitements.clear();
+    m_ordreTraitements.clear();
+
+    // 2) Reconstruire la barre et appliquer les paramètres
+    for (const QJsonValue &v : pipelineArray) {
+        QJsonObject tjson = v.toObject();
+        QString nom = tjson["nom"].toString();  // ex: "Flou"
+
+        // on ajoute une entrée comme si l'utilisateur avait cliqué sur l'icône
+        ajouterTraitementDansBarre(nom);
+
+        if (m_listeBarreTraitements.isEmpty())
+            continue;
+
+        // on récupère le dernier traitement ajouté
+        EntreeBarreTraitement &entree = m_listeBarreTraitements.last();
+        TraitementImage *t = entree.traitement;
+        if (!t)
+            continue;
+
+        // on applique les paramètres stockés dans le JSON
+        QVariantMap params;
+        QJsonObject paramsJson = tjson["params"].toObject();
+        for (auto it = paramsJson.begin(); it != paramsJson.end(); ++it) {
+            params[it.key()] = it.value().toVariant();
+        }
+
+        t->appliquerParametresDepuis(params);
+    }
+
+    // 3) On synchronise tout et on recalcule l'image
+    mettreAJourFluxDepuisBarre();
+    mettreAJourLogsTexte();
+}
 
 
 void MainWindow::appliquerStyleVisionBox()
@@ -612,24 +996,31 @@ void MainWindow::appliquerStyleVisionBox()
         }
 
 
-
-        /* ====== BOUTON EXPORTER ====== */
-        QPushButton#boutonExporter {
+        /* ====== BOUTONS D'EXPORT / IMPORT ====== */
+        QPushButton#boutonExporter,
+        QPushButton#boutonExporterSession,
+        QPushButton#boutonImporterSession {
             background-color: #88421D;
             color: white;
-            border-radius: 12px;       /* AVANT 18 */
+            border-radius: 12px;
             padding: 8px 12px;
             border: none;
             font-size: 13px;
             font-weight: 600;
         }
 
-        QPushButton#boutonExporter:hover {
+        QPushButton#boutonExporter:hover,
+        QPushButton#boutonExporterSession:hover,
+        QPushButton#boutonImporterSession:hover {
             background-color: #A85B2E;
         }
-        QPushButton#boutonExporter:pressed {
+
+        QPushButton#boutonExporter:pressed,
+        QPushButton#boutonExporterSession:pressed,
+        QPushButton#boutonImporterSession:pressed {
             background-color: #5F2D13;
         }
+
 
 
         /* ====== CHIPS DANS LA BARRE DE TRAITEMENT ====== */

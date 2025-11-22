@@ -21,6 +21,7 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *evenement) override;
+    QSize sizeHint() const override;
 
 private slots:
     void ouvrirFenetreParametres(BoiteTraitement *boite);

@@ -17,6 +17,13 @@ find_package(Qt6 REQUIRED COMPONENTS
     MultimediaWidgets
 )
 
+# --- OpenCV ---
+# OpenCV_DIR est déjà défini dans Qt Creator : D:/opencv/build/x64/vc16/lib
+find_package(OpenCV REQUIRED)
+
+message(STATUS "OpenCV Include Dir: ${OpenCV_INCLUDE_DIRS}")
+message(STATUS "OpenCV Libraries  : ${OpenCV_LIBS}")
+
 set(TS_FILES VisionBox_fr_FR.ts)
 
 # --- Tous les fichiers du projet ---
@@ -25,9 +32,17 @@ set(PROJECT_SOURCES
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
+
     webcamdialog.cpp
     webcamdialog.h
     clickablelabel.h
+
+
+    boite_traitement.h
+    boite_traitement.cpp
+    panneau_flux_traitements.h
+    panneau_flux_traitements.cpp
+
     resources.qrc
     ${TS_FILES}
 )
@@ -36,25 +51,39 @@ set(PROJECT_SOURCES
 qt_add_executable(VisionBox
     MANUAL_FINALIZATION
     ${PROJECT_SOURCES}
-    traitement_image.h
-    boite_traitement.h
-    boite_traitement.cpp
-    panneau_flux_traitements.h
-    panneau_flux_traitements.cpp
-    traitement_flou.h
-    traitement_flou.cpp
+    traitements/core/flou.h
+    traitements/core/flou.cpp
+    traitements/core/mosaique.h
 
-
+    traitements/core/contours.h
+    traitements/core/contours.cpp
+    traitements/core/mosaique.cpp
+    traitements/adaptateurs_qt/adaptateur_flou.h
+    traitements/adaptateurs_qt/adaptateur_flou.cpp
+    traitements/adaptateurs_qt/adaptateur_mosaique.h
+    traitements/adaptateurs_qt/adaptateur_mosaique.cpp
+    traitements/adaptateurs_qt/adaptateur_contours.h
+    traitements/adaptateurs_qt/adaptateur_contours.cpp
+    traitements/adaptateurs_qt/traitement_image.h
+    traitements/traitement_factory.h
 )
 
+# --- Traductions ---
 qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 
-# --- Liaisons Qt ---
+# --- Inclusions OpenCV ---
+target_include_directories(VisionBox
+    PRIVATE
+        ${OpenCV_INCLUDE_DIRS}
+)
+
+# --- Liaisons Qt + OpenCV ---
 target_link_libraries(VisionBox
     PRIVATE
         Qt6::Widgets
         Qt6::Multimedia
         Qt6::MultimediaWidgets
+        ${OpenCV_LIBS}
 )
 
 # --- Propriétés du binaire ---

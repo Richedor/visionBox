@@ -1,7 +1,6 @@
 #include "panneau_flux_traitements.h"
 #include "boite_traitement.h"
-#include "traitement_image.h"
-
+#include "traitements/adaptateurs_qt/traitement_image.h"
 #include <QPainter>
 #include <QDialog>
 #include <QVBoxLayout>
@@ -22,6 +21,19 @@ PanneauFluxTraitements::PanneauFluxTraitements(QWidget *parent)
     setStyleSheet("background-color:#ffeef4;");
 }
 
+QSize PanneauFluxTraitements::sizeHint() const
+{
+    // Taille par défaut proposée au layout / QScrollArea
+    int w = minimumWidth();
+    int h = minimumHeight();
+
+    if (w <= 0) w = 400;   // largeur par défaut si rien de spécial
+    if (h <= 0) h = 320;   // hauteur par défaut si rien de spécial
+
+    return QSize(w, h);
+}
+
+
 void PanneauFluxTraitements::definirOrdreTraitements(
     const QList<TraitementImage*> &liste,
     const QImage &imageSource)
@@ -38,7 +50,7 @@ void PanneauFluxTraitements::definirOrdreTraitements(
     int x = 40;
     int y = 40;
 
-    // 👉 imageCourante va servir à faire un pipeline pour les aperçus
+    // imageCourante va servir à faire un pipeline pour les aperçus
     QImage imageCourante = m_imageSource;
 
     for (TraitementImage *t : m_traitements) {
@@ -64,6 +76,15 @@ void PanneauFluxTraitements::definirOrdreTraitements(
         x += boite->width() + 80; // espacement horizontal
     }
 
+    // Ajuster la largeur minimale du panneau en fonction du nombre de boîtes
+    int largeurTotale = x + 40;          // marge de droite
+    if (largeurTotale < 400)
+        largeurTotale = 400;            // largeur minimale par défaut
+
+    setMinimumWidth(largeurTotale);
+    // garder une hauteur confortable
+    if (minimumHeight() < 320)
+        setMinimumHeight(320);
     update(); // redessiner flèches
 }
 
@@ -146,16 +167,27 @@ void PanneauFluxTraitements::ouvrirFenetreParametres(BoiteTraitement *boite)
 
     QWidget *editeur = t->creerEditeurParametres(&fenetre);
 
+    // 🔹 NOUVEAU : actualiser l'aperçu local et la boîte quand les paramètres changent
+    QObject::connect(t, &TraitementImage::parametresModifies,
+                     &fenetre,
+                     [this, t, etiquetteApercu, boite]()
+                     {
+                         if (m_imageSource.isNull())
+                             return;
+
+                         // On régénère l'aperçu avec les paramètres courants internes du traitement
+                         QImage nouveauApercu = t->genererApercu(m_imageSource, QVariantMap());
+
+                         // Aperçu dans la fenêtre de paramètres
+                         etiquetteApercu->setPixmap(QPixmap::fromImage(nouveauApercu));
+
+                         // Aperçu sur la boîte dans le panneau
+                         boite->definirImageApercu(nouveauApercu);
+                     });
+
     disposition->addWidget(etiquetteApercu);
     disposition->addWidget(editeur);
 
     fenetre.resize(360, 400);
     fenetre.exec();
-
-    // TODO : récupérer les nouveaux paramètres depuis l’éditeur
-    // et redemander un aperçu :
-    //
-    // QVariantMap parametres = ...;
-    // QImage nouveauApercu = t->genererApercu(m_imageSource, parametres);
-    // boite->definirImageApercu(nouveauApercu);
 }

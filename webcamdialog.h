@@ -1,12 +1,13 @@
 #pragma once
 
 #include <QDialog>
-#include <QCamera>
-#include <QMediaCaptureSession>
-#include <QVideoWidget>
-#include <QImageCapture>
+#include <QTimer>
+#include <QImage>
+#include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
+
+#include <opencv2/opencv.hpp>
 
 class WebcamDialog : public QDialog
 {
@@ -17,16 +18,26 @@ public:
     ~WebcamDialog();
 
 signals:
-    void imageCaptured(const QImage &image);  // envoyé au MainWindow
+    // Image capturée et envoyée au MainWindow (inchangé)
+    void imageCaptured(const QImage &image);
 
 private slots:
-    void onCaptureClicked();
-    void onImageCaptured(int id, const QImage &img);
+    void onCaptureClicked();   // clic sur le bouton "Capturer"
+    void updateFrame();        // appelé périodiquement pour rafraîchir la webcam
 
 private:
-    QCamera *m_camera = nullptr;
-    QMediaCaptureSession m_captureSession;
-    QVideoWidget *m_view = nullptr;
-    QImageCapture *m_imageCapture = nullptr;
+    // OpenCV
+    cv::VideoCapture m_cap;    // flux vidéo (webcam)
+    cv::Mat m_lastFrame;       // dernière frame brute OpenCV
+
+    // Timer pour acquisition périodique
+    QTimer m_timer;
+
+    // Interface
+    QLabel *m_view = nullptr;        // zone d'affichage de l'image
     QPushButton *m_btnCapture = nullptr;
+    QVBoxLayout *m_layout = nullptr;
+
+    // Utilitaire de conversion Mat -> QImage
+    QImage matToQImage(const cv::Mat &mat);
 };
