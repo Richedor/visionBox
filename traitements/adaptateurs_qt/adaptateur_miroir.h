@@ -2,11 +2,11 @@
 
 #include "traitement_image.h"
 
-class AdaptateurContours : public TraitementImage
+class AdaptateurMiroir : public TraitementImage
 {
     Q_OBJECT
 public:
-    explicit AdaptateurContours(QObject *parent = nullptr);
+    explicit AdaptateurMiroir(QObject *parent = nullptr);
 
     QString nom() const override;
     QImage appliquer(const QImage &entree,
@@ -22,19 +22,16 @@ public:
 private:
     QVariantMap m_parametresCourants;
 
-    int extraireSeuilBas(const QVariantMap&) const;
-    int extraireSeuilHaut(const QVariantMap&) const;
-
-    QImage appliquerContoursQt(const QImage &entree,
-                               int seuilBas, int seuilHaut) const;
+    bool extraireFlip(const QVariantMap &parametres) const;
+    QImage appliquerMiroirQt(const QImage &entree, bool horizontal) const;
 };
 
 
 /* À coller dans traitement_factory.h :
 
-#include "adaptateurs_qt/adaptateur_contours.h"
+#include "adaptateurs_qt/adaptateur_miroir.h"
 
-if (id == "contours")
-    return new AdaptateurContours();
+if (id == "miroir")
+    return new AdaptateurMiroir();
 
 */

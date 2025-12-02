@@ -2,11 +2,11 @@
 
 #include "traitement_image.h"
 
-class AdaptateurContours : public TraitementImage
+    class AdaptateurInvertColor : public TraitementImage
 {
     Q_OBJECT
 public:
-    explicit AdaptateurContours(QObject *parent = nullptr);
+    explicit AdaptateurInvertColor(QObject *parent = nullptr);
 
     QString nom() const override;
     QImage appliquer(const QImage &entree,
@@ -21,20 +21,15 @@ public:
 
 private:
     QVariantMap m_parametresCourants;
-
-    int extraireSeuilBas(const QVariantMap&) const;
-    int extraireSeuilHaut(const QVariantMap&) const;
-
-    QImage appliquerContoursQt(const QImage &entree,
-                               int seuilBas, int seuilHaut) const;
+    QImage appliquerInvertColorQt(const QImage &entree) const;
 };
 
 
 /* À coller dans traitement_factory.h :
 
-#include "adaptateurs_qt/adaptateur_contours.h"
+#include "adaptateurs_qt/adaptateur_invertcolor.h"
 
-if (id == "contours")
-    return new AdaptateurContours();
+if (id == "invertcolor")
+    return new AdaptateurInvertColor();
 
 */

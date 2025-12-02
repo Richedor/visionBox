@@ -9,7 +9,12 @@
 #include <QStringList>
 #include <QList>
 
+#include <QTimer>
+
 #include <opencv2/opencv.hpp>
+
+#include <QPushButton>
+
 
 // déclarations avancées de futurs traitements
 class TraitementFlou;
@@ -41,6 +46,9 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    QString typeAcquisition() const { return m_typeAcquisition; }
+    QString cheminSource()   const { return m_cheminSource; }
+
 private slots:
     void onImageClicked();                       // clic sur l'icône "Image" (charger depuis le PC)
     void onWebcamClicked();                      // clic sur l'icône "Webcam"
@@ -52,8 +60,15 @@ private slots:
     // appelé quand un traitement signale que ses paramètres ont changé
     void mettreAJourImageApresPipeline();        // recalcule et affiche l'image finale
 
+    void onVideoClicked();          // quand on clique sur l'icône vidéo
+    void onVideoFrameTimeout();     // appelé régulièrement pour lire la vidéo
+    void onVideoPlayPauseClicked();
+    void afficherCredits();
+
 private:
     Ui::MainWindow *ui;
+
+    void construirePageAccueil();
 
     // Image courante en OpenCV (base de tous les traitements)
     cv::Mat m_imageCourante;
@@ -98,6 +113,22 @@ private:
     // --- Utilitaires de conversion OpenCV <-> Qt ---
     QImage matToQImage(const cv::Mat &mat);
     cv::Mat qImageToMat(const QImage &image);
+
+
+    //Video
+    cv::VideoCapture m_videoCapture;
+    QTimer m_videoTimer;
+
+    QString m_videoPath;        // chemin de la vidéo courante
+    bool m_videoPaused = false; // état pause/play
+    bool m_videoLoop = true;    // boucle activée pour la fenêtre principale
+
+    QPushButton *m_btnVideoPlayPause = nullptr; // bouton transparent
+
+    void recentrerBoutonVideo();
+
+    void deplacerTraitementDansBarre(QWidget *wrapper, int delta);
+
 
 protected:
     void resizeEvent(QResizeEvent *event) override;   // on gère le resize

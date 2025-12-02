@@ -66,6 +66,20 @@ qt_add_executable(VisionBox
     traitements/adaptateurs_qt/adaptateur_contours.cpp
     traitements/adaptateurs_qt/traitement_image.h
     traitements/traitement_factory.h
+    traitements/adaptateurs_qt/adaptateur_miroir.cpp
+    traitements/adaptateurs_qt/adaptateur_miroir.h
+    traitements/core/miroir.cpp
+    miroir.h
+    traitements/core/miroir.h
+    traitements/core/invertcolor.h
+    traitements/core/invertcolor.cpp
+    traitements/adaptateurs_qt/adaptateur_invertcolor.h
+    traitements/adaptateurs_qt/adaptateur_invertcolor.cpp
+    traitements/core/sepia.h
+    traitements/core/sepia.cpp
+    traitements/adaptateurs_qt/adaptateur_sepia.h
+    traitements/adaptateurs_qt/adaptateur_sepia.cpp
+    images/logo_visionbox.svg
 )
 
 # --- Traductions ---

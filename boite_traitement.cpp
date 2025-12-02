@@ -10,7 +10,7 @@ BoiteTraitement::BoiteTraitement(TraitementImage *traitement, QWidget *parent)
     m_traitement(traitement)
 {
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet("background-color:#b10f3b; border-radius:15px;");
+    setStyleSheet("background-color:#88421D; border-radius:15px;");
 
     m_etiquetteTitre = new QLabel(traitement ? traitement->nom() : "Traitement", this);
     m_etiquetteTitre->setAlignment(Qt::AlignCenter);
@@ -23,9 +23,12 @@ BoiteTraitement::BoiteTraitement(TraitementImage *traitement, QWidget *parent)
 
     m_boutonParametres = new QPushButton("Paramètres", this);
     m_boutonParametres->setStyleSheet(
-        "QPushButton { background:white; color:#b10f3b; "
+        "QPushButton { background:#F9C863; color:#88421D; "
         "border-radius:10px; padding:4px 12px; }"
-        "QPushButton:hover { background:#ffe6ee; }");
+        "QPushButton:hover { background:#F7B94A; }"
+        "QPushButton:pressed { background:#D79A2E; }"
+        );
+
 
     auto *disposition = new QVBoxLayout(this);
     disposition->setContentsMargins(10, 10, 10, 10);

@@ -15,18 +15,17 @@ class WebcamDialog : public QDialog
 
 public:
     explicit WebcamDialog(QWidget *parent = nullptr);
-    ~WebcamDialog();
+    ~WebcamDialog() override;
 
 signals:
-    // Image capturée et envoyée au MainWindow (inchangé)
-    void imageCaptured(const QImage &image);
+    // Signal émis quand l’utilisateur clique sur "Capturer"
+    void imageCaptured(const QImage &img);
 
 private slots:
-    void onCaptureClicked();   // clic sur le bouton "Capturer"
-    void updateFrame();        // appelé périodiquement pour rafraîchir la webcam
+    void onFrameTimeout();     // appelé régulièrement par le QTimer
+    void onCaptureClicked();   // bouton "Capturer"
 
 private:
-    // OpenCV
     cv::VideoCapture m_cap;    // flux vidéo (webcam)
     cv::Mat m_lastFrame;       // dernière frame brute OpenCV
 

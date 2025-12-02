@@ -1,4 +1,19 @@
-#ifndef CONTOURS_H
-#define CONTOURS_H
+/*
+    FICHIER : contours.h
+    UTILITE :
+    - Déclare la structure ParametresContours
+    - Déclare la fonction appliquerContoursCore
+*/
 
-#endif // CONTOURS_H
+#pragma once
+#include <opencv2/opencv.hpp>
+
+struct ParametresContours
+{
+    int seuilBas = 100;
+    int seuilHaut = 200;
+};
+
+cv::Mat appliquerContoursCore(
+    const cv::Mat &entree,
+    const ParametresContours &params);

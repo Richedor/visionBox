@@ -35,10 +35,29 @@
 
 #include "traitements/traitement_factory.h"
 
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QDebug>
+#include <QPixmap>
+
+#include <QStyle>
+
+
 
 // plus tard :
-// #include "traitements/adaptateurs_qt/adaptateur_mosaique.h"
-// #include "traitements/adaptateurs_qt/adaptateur_contours.h"
+#include "traitements/adaptateurs_qt/adaptateur_mosaique.h"
+#include "traitements/adaptateurs_qt/adaptateur_miroir.h"
+#include "traitements/adaptateurs_qt/adaptateur_invertcolor.h"
+
+#include "traitements/adaptateurs_qt/adaptateur_sepia.h"
+#include "traitements/adaptateurs_qt/adaptateur_contours.h"
+
+#include <QDesktopServices>
+#include <QUrl>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
+
 
 
 using namespace cv;
@@ -48,24 +67,247 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    setWindowTitle("VisionBox – Traitements d’Images");
 
     m_typeAcquisition.clear();
     m_cheminSource.clear();
 
-
     initialiserPageAffichage();
     appliquerStyleVisionBox();
 
-    // S'assurer qu'on démarre sur la page de sélection
-    ui->stackedWidget->setCurrentWidget(ui->page_1_Select);
+    construirePageAccueil();
 
-    // Connexion clic "Image"
+    // démarre sur la page de sélection
+    ui->stackedWidget->setCurrentWidget(ui->page_0_Welcome);
+
+    // --- Connexions des icônes de la page 1 ---
+
+    // Icône "Image" -> charger une image
     connect(ui->labelImage, &ClickableLabel::clicked,
             this, &MainWindow::onImageClicked);
 
-    // Connexion clic "Webcam"
+    // Icône "Webcam" -> ouvrir la webcam
     connect(ui->labelWebcam, &ClickableLabel::clicked,
             this, &MainWindow::onWebcamClicked);
+
+    // Icône "Vidéo" -> ouvrir un fichier vidéo
+    connect(ui->labelVideo, &ClickableLabel::clicked,
+            this, &MainWindow::onVideoClicked);
+
+    // --- Connexion du timer vidéo ---
+    connect(&m_videoTimer, &QTimer::timeout,
+            this, &MainWindow::onVideoFrameTimeout);
+
+    // --- Bouton Pause/Play transparent sur la zone de résultat ---
+
+    // Ici, le label de résultat final est ui->labelPreview
+    // (c’est celui utilisé dans afficherImageDansPreview)
+    QLabel *zoneResultat = ui->labelPreview;
+
+    // Création du bouton en enfant du label d’aperçu
+    m_btnVideoPlayPause = new QPushButton(zoneResultat);
+    m_btnVideoPlayPause->setCheckable(true);
+    m_btnVideoPlayPause->setChecked(false); // false = en lecture
+    m_btnVideoPlayPause->setFlat(true);
+
+    // Style "boule" sombre transparente
+    m_btnVideoPlayPause->setStyleSheet(
+        "QPushButton {"
+        "  background-color: rgba(0, 0, 0, 80);"
+        "  border: none;"
+        "  border-radius: 30px;"
+        "  min-width: 60px;"
+        "  min-height: 60px;"
+        "  font-size: 28px;"
+        "  color: white;"
+        "}"
+        "QPushButton:checked {"
+        "  background-color: rgba(0, 0, 0, 120);"
+        "}"
+        );
+
+    // Symbole pause au départ  = vidéo en train de jouer
+    m_btnVideoPlayPause->setIcon(
+        style()->standardIcon(QStyle::SP_MediaPause)
+        );
+    m_btnVideoPlayPause->setIconSize(QSize(48, 48));
+
+    // Placement approximatif au centre du label (au besoin on ajustera plus tard)
+    int cx = zoneResultat->width() / 2 - 30;
+    int cy = zoneResultat->height() / 2 - 30;
+    if (cx < 0) cx = 0;
+    if (cy < 0) cy = 0;
+    m_btnVideoPlayPause->move(cx, cy);
+    m_btnVideoPlayPause->raise(); // au-dessus de l'image
+
+    // Clic sur le bouton -> pause / play
+    connect(m_btnVideoPlayPause, &QPushButton::clicked,
+            this, &MainWindow::onVideoPlayPauseClicked);
+
+
+
+
+    setWindowTitle("VisionBox – Traitements d’images"); // Titre de la fenêtre
+
+    //
+    // --- MENUS ---
+    //
+
+    //  Menu Fichier
+    QMenu *menuFichier = menuBar()->addMenu("Fichier");
+
+    QAction *actionChargerImage = new QAction("Charger une image…", this);
+    QAction *actionChargerVideo = new QAction("Charger une vidéo…", this);
+    QAction *actionLancerWebcam = new QAction("Lancer la webcam", this);
+    QAction *actionImporterWorkflow = new QAction("Importer un workflow…", this);
+    QAction *actionExporterWorkflow = new QAction("Exporter le workflow…", this);
+    QAction *actionSauvegarderResultat = new QAction("Sauvegarder le résultat…", this);
+    QAction *actionQuitter = new QAction("Quitter", this);
+
+    menuFichier->addAction(actionChargerImage);
+    menuFichier->addAction(actionChargerVideo);
+    menuFichier->addAction(actionLancerWebcam);
+    menuFichier->addSeparator();
+    menuFichier->addAction(actionImporterWorkflow);
+    menuFichier->addAction(actionExporterWorkflow);
+    menuFichier->addSeparator();
+    menuFichier->addAction(actionSauvegarderResultat);
+    menuFichier->addSeparator();
+    menuFichier->addAction(actionQuitter);
+
+    // Menu Traitements
+    QMenu *menuTraitements = menuBar()->addMenu(tr("Traitements"));
+
+    QAction *actionTraitementMosaique   = new QAction(tr("Mosaïque"), this);
+    QAction *actionTraitementFlou       = new QAction(tr("Flou"), this);
+    QAction *actionTraitementSepia      = new QAction(tr("Sépia"), this);
+    QAction *actionTraitementInvert     = new QAction(tr("Invertcolor"), this);
+    QAction *actionTraitementMiroir     = new QAction(tr("Miroir"), this);
+    QAction *actionTraitementContours   = new QAction(tr("Contours"), this);
+
+    menuTraitements->addAction(actionTraitementMosaique);
+    menuTraitements->addAction(actionTraitementFlou);
+    menuTraitements->addAction(actionTraitementSepia);
+    menuTraitements->addAction(actionTraitementInvert);
+    menuTraitements->addAction(actionTraitementMiroir);
+    menuTraitements->addAction(actionTraitementContours);
+
+
+
+    //  Menu Aide
+    QMenu *menuAide = menuBar()->addMenu("Aide");
+
+    QAction *actionDoc = new QAction("Documentation VisionBox", this);
+    QAction *actionExempleWorkflow = new QAction("Voir un exemple de workflow", this);
+    QAction *actionOuvrirGithub = new QAction("Ouvrir GitHub", this);
+    QAction *actionVerifierMaj = new QAction("Vérifier les mises à jour", this);
+    QAction *actionCredits = new QAction("Crédits", this);
+
+    menuAide->addAction(actionDoc);
+    menuAide->addAction(actionExempleWorkflow);
+    menuAide->addAction(actionOuvrirGithub);
+    menuAide->addAction(actionVerifierMaj);
+    menuAide->addSeparator();
+    menuAide->addAction(actionCredits);
+
+    //
+    // --- CONNEXIONS ---
+    //
+
+    //  Fichier
+    connect(actionChargerImage, &QAction::triggered, this, [this]() {
+        QString fileName = QFileDialog::getOpenFileName(
+            this,
+            "Charger une image",
+            QString(),
+            "Images (*.png *.jpg *.jpeg *.bmp *.tiff)"
+            );
+        if (!fileName.isEmpty()) {
+            // TODO : appelle ici ta fonction de chargement d'image
+            // ex : chargerImage(fileName);
+        }
+    });
+
+    connect(actionChargerVideo, &QAction::triggered, this, [this]() {
+        QString fileName = QFileDialog::getOpenFileName(
+            this,
+            "Charger une vidéo",
+            QString(),
+            "Vidéos (*.mp4 *.avi *.mkv *.mov)"
+            );
+        if (!fileName.isEmpty()) {
+            // TODO : appelle ici ta fonction de chargement de vidéo
+            // ex : chargerVideo(fileName);
+        }
+    });
+
+    connect(actionLancerWebcam, &QAction::triggered,
+            this, &MainWindow::onWebcamClicked);
+
+
+
+    // Exporter le workflow = même chose que "Exporter la session (image + log)"
+    connect(actionExporterWorkflow, &QAction::triggered,
+            this, &MainWindow::exporterSessionComplete);
+
+    // Importer un workflow = même chose que "Importer une session"
+    connect(actionImporterWorkflow, &QAction::triggered, this, [this]() {
+        QString fichier = QFileDialog::getOpenFileName(
+            this,
+            tr("Ouvrir un log de session"),
+            QString(),
+            tr("Fichiers JSON (*.json)")
+            );
+        if (!fichier.isEmpty()) {
+            importerSessionDepuisJSON(fichier);
+        }
+    });
+
+
+    connect(actionSauvegarderResultat, &QAction::triggered,
+            this, &MainWindow::exporterImageFinale);
+
+
+    connect(actionQuitter, &QAction::triggered, this, &MainWindow::close);
+
+    //  TTraitements : ajout dans la barre, comme un clic sur les boutons
+    connect(actionTraitementMosaique, &QAction::triggered, this, [this]() {
+        ajouterTraitementDansBarre("Mosaïque");
+    });
+    connect(actionTraitementFlou, &QAction::triggered, this, [this]() {
+        ajouterTraitementDansBarre("Flou");
+    });
+    connect(actionTraitementSepia, &QAction::triggered, this, [this]() {
+        ajouterTraitementDansBarre("Sépia");
+    });
+    connect(actionTraitementInvert, &QAction::triggered, this, [this]() {
+        ajouterTraitementDansBarre("Invertcolor");
+    });
+    connect(actionTraitementMiroir, &QAction::triggered, this, [this]() {
+        ajouterTraitementDansBarre("Miroir");
+    });
+    connect(actionTraitementContours, &QAction::triggered, this, [this]() {
+        ajouterTraitementDansBarre("Contours");
+    });
+
+
+    //  Aide
+    const QUrl urlGithub("https://github.com/Richedor/visionBox");
+
+    auto ouvrirGithubDepuisAide = [urlGithub]() {
+        QDesktopServices::openUrl(urlGithub);
+    };
+
+    connect(actionDoc,          &QAction::triggered, this, ouvrirGithubDepuisAide);
+    connect(actionExempleWorkflow, &QAction::triggered, this, ouvrirGithubDepuisAide);
+    connect(actionOuvrirGithub, &QAction::triggered, this, ouvrirGithubDepuisAide);
+    connect(actionVerifierMaj,  &QAction::triggered, this, ouvrirGithubDepuisAide);
+
+    // Crédits -> fenêtre dédiée
+    connect(actionCredits, &QAction::triggered, this, &MainWindow::afficherCredits);
+
+
+
 }
 
 
@@ -73,6 +315,116 @@ MainWindow::~MainWindow()
 {
     delete ui;
 }
+
+
+void MainWindow::construirePageAccueil()
+{
+    QWidget *page = ui->page_0_Welcome;
+    if (!page) return;
+
+    //  supprime l’éventuel ancien layout / widgets
+    if (QLayout *old = page->layout()) {
+        QLayoutItem *item;
+        while ((item = old->takeAt(0))) {
+            if (QWidget *w = item->widget())
+                w->deleteLater();
+            delete item;
+        }
+        delete old;
+    }
+
+    // Layout vertical
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(25);
+
+    // Stretch en haut pour centrer verticalement tout le bloc
+    layout->addStretch();
+
+    // Logo
+    QLabel *logo = new QLabel(page);
+    QPixmap pix(":/images/logo_visionbox.svg");
+    if (!pix.isNull()) {
+        logo->setPixmap(pix.scaled(160, 160, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    } else {
+        logo->setText("VisionBox");
+    }
+    logo->setAlignment(Qt::AlignCenter);
+    layout->addWidget(logo, 0, Qt::AlignHCenter);
+
+    // Titre principal
+    QLabel *titre = new QLabel("VisionBox", page);
+    titre->setObjectName("welcomeTitle");
+    titre->setAlignment(Qt::AlignCenter);
+    layout->addWidget(titre, 0, Qt::AlignHCenter);
+
+    // Sous-titre
+    QLabel *sousTitre = new QLabel(
+        "Explorez, traitez et visualisez vos images\n"
+        "avec simplicité et précision.",
+        page
+        );
+    sousTitre->setObjectName("welcomeSub");
+    sousTitre->setAlignment(Qt::AlignCenter);
+    layout->addWidget(sousTitre, 0, Qt::AlignHCenter);
+
+    layout->addSpacing(20);
+
+    // Bouton "Commencer"
+    QPushButton *btn = new QPushButton("Commencer", page);
+    btn->setObjectName("btnCommencer");
+    btn->setFixedWidth(220);
+    btn->setFixedHeight(45);
+
+    // ➜ centré horizontalement
+    layout->addWidget(btn, 0, Qt::AlignHCenter);
+
+    // Stretch en bas pour finir le centrage vertical
+    layout->addStretch();
+
+    page->setStyleSheet(R"(
+        QWidget#page_0_Welcome {
+            background-color: #FFEEF4;
+        }
+
+        QLabel#welcomeTitle {
+            color: #88421D;
+            font-size: 32px;
+            font-weight: 700;
+            font-family: "Segoe UI", "Arial", sans-serif;
+        }
+
+        QLabel#welcomeSub {
+            color: #5F2D13;
+            font-size: 16px;
+            font-family: "Segoe UI", "Arial", sans-serif;
+        }
+
+        QPushButton#btnCommencer {
+            background-color: #88421D;
+            color: white;
+            border-radius: 22px;
+            padding: 10px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+        }
+
+        QPushButton#btnCommencer:hover {
+            background-color: #9d5732;
+        }
+
+        QPushButton#btnCommencer:pressed {
+            background-color: #9d5732;
+        }
+    )");
+
+    // Connexion du bouton : aller vers la page d'acquisition
+    connect(btn, &QPushButton::clicked, this, [this]() {
+        ui->stackedWidget->setCurrentWidget(ui->page_1_Select);
+    });
+}
+
 
 // -----------------  CLIC SUR "IMAGE"  -----------------
 
@@ -146,7 +498,6 @@ void MainWindow::onWebcamImageReady(const QImage &img)
         return;
     }
 
-    // 1) Stocker en Mat pour les traitements OpenCV
     m_imageCourante = qImageToMat(img);
     if (m_imageCourante.empty()) {
         QMessageBox::warning(this, tr("Erreur"),
@@ -154,20 +505,16 @@ void MainWindow::onWebcamImageReady(const QImage &img)
         return;
     }
 
-    //  On mémorise l'image originale comme source du pipeline
     m_imageSource = img;
 
-    // Infos acquisition pour le log
     m_typeAcquisition = "webcam";
     m_cheminSource.clear();
     mettreAJourLogsTexte();
 
-
-    // 2) Affichage dans la page d'aperçu
     ui->stackedWidget->setCurrentWidget(ui->page_2_Display);
 
-    QPixmap pix = QPixmap::fromImage(img);
-    afficherImageDansPreview(pix);
+    // au lieu d'afficher l'image brute, on lance directement le pipeline
+    mettreAJourImageApresPipeline();
 }
 
 
@@ -272,8 +619,8 @@ void MainWindow::initialiserPageAffichage()
         "Mosaïque",
         "Flou",
         "Sépia",
-        "Détection de visage",
-        "Gris",
+        "Invertcolor",
+        "Miroir",
         "Contours"
     };
 
@@ -505,6 +852,8 @@ void MainWindow::afficherImageDansPreview(const QPixmap &pix)
     ui->labelPreview->setScaledContents(false);
     ui->labelPreview->setAlignment(Qt::AlignCenter);
     ui->labelPreview->setPixmap(cropped);
+    recentrerBoutonVideo();
+
 }
 
 
@@ -517,6 +866,8 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     if (ui->stackedWidget->currentWidget() == ui->page_2_Display &&
         !m_lastPreview.isNull()) {
         afficherImageDansPreview(m_lastPreview);
+        recentrerBoutonVideo();
+
     }
 }
 
@@ -535,14 +886,21 @@ void MainWindow::ajouterTraitementDansBarre(const QString &nom)
     layoutWrapper->setContentsMargins(0, 0, 0, 0);
     layoutWrapper->setSpacing(4);
 
-    // --- Bouton "pill" avec le nom du traitement ---
+    // Bouton flèche gauche
+    QPushButton *btnLeft = new QPushButton("<", wrapper);
+    btnLeft->setFixedSize(20, 20);
+    btnLeft->setCursor(Qt::PointingHandCursor);
+    btnLeft->setProperty("role", "chipMove");
+    btnLeft->setToolTip(tr("Déplacer vers la gauche"));
+
+    // Bouton "pill" avec le nom du traitement
     QPushButton *chip = new QPushButton(nom, wrapper);
     chip->setProperty("role", "chipTraitement");
     chip->setCursor(Qt::PointingHandCursor);
     chip->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     chip->setMinimumHeight(26);
 
-    // --- Bouton croix pour supprimer ---
+    // Bouton croix pour supprimer
     QPushButton *btnClose = new QPushButton(wrapper);
     btnClose->setProperty("role", "chipClose");
     btnClose->setCursor(Qt::PointingHandCursor);
@@ -550,8 +908,18 @@ void MainWindow::ajouterTraitementDansBarre(const QString &nom)
     btnClose->setIcon(QIcon(":/images/croix.png"));
     btnClose->setIconSize(QSize(10, 10));
 
+    // Bouton flèche droite
+    QPushButton *btnRight = new QPushButton(">", wrapper);
+    btnRight->setFixedSize(20, 20);
+    btnRight->setCursor(Qt::PointingHandCursor);
+    btnRight->setProperty("role", "chipMove");
+    btnRight->setToolTip(tr("Déplacer vers la droite"));
+
+    layoutWrapper->addWidget(btnLeft);
     layoutWrapper->addWidget(chip);
     layoutWrapper->addWidget(btnClose);
+    layoutWrapper->addWidget(btnRight);
+
 
     // --- Insère avant le stretch final ---
     int indexInsert = m_layoutBarreTraitement->count();
@@ -572,13 +940,23 @@ void MainWindow::ajouterTraitementDansBarre(const QString &nom)
 
     if (nom == "Flou") {
         traitement = new AdaptateurFlou(this);
+    } else if (nom == "Mosaïque") {
+        traitement = new AdaptateurMosaique(this);
+    } else if (nom == "Sépia") {
+        traitement = new AdaptateurSepia(this);
+    } else if (nom == "Invertcolor") {
+        traitement = new AdaptateurInvertColor(this);
+    } else if (nom == "Miroir") {
+        traitement = new AdaptateurMiroir(this);
+    } else if (nom == "Contours") {
+        traitement = new AdaptateurContours(this);
     }
-    // plus tard :
-    // else if (nom == "Mosaïque") {
-    //     traitement = new AdaptateurMosaique(this);
-    // } else if (nom == "Contours") {
-    //     traitement = new AdaptateurContours(this);
-    // }
+
+    if (!traitement) {
+        // On retire le chip qu'on vient d'ajouter, sinon on a une entrée vide
+        wrapper->deleteLater();
+        return;
+    }
 
     entree.traitement = traitement;
     m_listeBarreTraitements.append(entree);
@@ -613,6 +991,17 @@ void MainWindow::ajouterTraitementDansBarre(const QString &nom)
         mettreAJourFluxDepuisBarre();
     });
 
+
+    // Déplacement à gauche / droite
+    connect(btnLeft, &QPushButton::clicked, this, [this, wrapper]() {
+        deplacerTraitementDansBarre(wrapper, -1);
+    });
+
+    connect(btnRight, &QPushButton::clicked, this, [this, wrapper]() {
+        deplacerTraitementDansBarre(wrapper, +1);
+    });
+
+
     // ----------------------------
     // Mise à jour du panneau de boites
     // ----------------------------
@@ -620,6 +1009,50 @@ void MainWindow::ajouterTraitementDansBarre(const QString &nom)
 }
 
 
+
+void MainWindow::deplacerTraitementDansBarre(QWidget *wrapper, int delta)
+{
+    if (!m_layoutBarreTraitement || !wrapper)
+        return;
+
+    // --- 1) Déplacer dans le modèle (m_listeBarreTraitements) ---
+    int indexModel = -1;
+    for (int i = 0; i < m_listeBarreTraitements.size(); ++i) {
+        if (m_listeBarreTraitements[i].widgetBarre == wrapper) {
+            indexModel = i;
+            break;
+        }
+    }
+    if (indexModel < 0)
+        return;
+
+    int newIndexModel = indexModel + delta;
+    if (newIndexModel < 0 || newIndexModel >= m_listeBarreTraitements.size())
+        return; // on sort, pas de dépassement
+
+    // on déplace l'entrée dans la liste
+    EntreeBarreTraitement entree = m_listeBarreTraitements.takeAt(indexModel);
+    m_listeBarreTraitements.insert(newIndexModel, entree);
+
+    // --- 2) Déplacer dans le layout ---
+    int indexLayout = m_layoutBarreTraitement->indexOf(wrapper);
+    if (indexLayout < 0)
+        return;
+
+    // le dernier item du layout est un stretch -> on évite d'aller après
+    int lastWidgetIndex = m_layoutBarreTraitement->count() - 2;
+    int newIndexLayout = indexLayout + delta;
+    if (newIndexLayout < 0)
+        newIndexLayout = 0;
+    if (newIndexLayout > lastWidgetIndex)
+        newIndexLayout = lastWidgetIndex;
+
+    m_layoutBarreTraitement->removeWidget(wrapper);
+    m_layoutBarreTraitement->insertWidget(newIndexLayout, wrapper);
+
+    // --- 3) Recalculer les boîtes + image finale ---
+    mettreAJourFluxDepuisBarre();
+}
 
 void MainWindow::mettreAJourFluxDepuisBarre()
 {
@@ -898,6 +1331,231 @@ void MainWindow::importerSessionDepuisJSON(const QString &fichier)
 }
 
 
+void MainWindow::onVideoClicked()
+{
+    QString fileName = QFileDialog::getOpenFileName(
+        this,
+        tr("Ouvrir une vidéo"),
+        QString(),
+        tr("Vidéos (*.mp4 *.avi *.mov *.mkv);;Tous les fichiers (*.*)"));
+
+    if (fileName.isEmpty())
+        return;
+
+    // Arrêter éventuellement une vidéo en cours
+    m_videoTimer.stop();
+    if (m_videoCapture.isOpened()) {
+        m_videoCapture.release();
+    }
+
+    if (!m_videoCapture.open(fileName.toStdString())) {
+        QMessageBox::warning(this, tr("Erreur"),
+                             tr("Impossible d'ouvrir la vidéo:\n%1").arg(fileName));
+        return;
+    }
+
+    m_videoPath = fileName;
+    m_videoLoop = true;     // boucle dans la fenêtre principale
+    m_videoPaused = false;  // démarrer en lecture
+
+    // Infos pour le log
+    m_typeAcquisition = "video";
+    m_cheminSource = fileName;
+    mettreAJourLogsTexte();
+
+    ui->stackedWidget->setCurrentWidget(ui->page_2_Display);
+
+    double fps = m_videoCapture.get(cv::CAP_PROP_FPS);
+    int intervalMs = 33;
+    if (fps > 1.0)
+        intervalMs = static_cast<int>(1000.0 / fps);
+
+    m_videoTimer.start(intervalMs);
+
+    // Bouton en mode "lecture"
+    if (m_btnVideoPlayPause) {
+        m_btnVideoPlayPause->setChecked(false);
+        m_btnVideoPlayPause->setIcon(
+            style()->standardIcon(QStyle::SP_MediaPause)
+            );
+        m_btnVideoPlayPause->setIconSize(QSize(48, 48));
+        m_btnVideoPlayPause->show();
+        recentrerBoutonVideo();
+
+    }
+}
+
+
+
+void MainWindow::onVideoFrameTimeout()
+{
+    if (!m_videoCapture.isOpened())
+        return;
+
+    if (m_videoPaused)
+        return;
+
+    cv::Mat frame;
+    if (!m_videoCapture.read(frame) || frame.empty()) {
+        // Fin de la vidéo
+        if (m_videoLoop && !m_videoPath.isEmpty()) {
+            // On relance depuis le début
+            m_videoCapture.release();
+            if (!m_videoCapture.open(m_videoPath.toStdString())) {
+                qWarning() << "Impossible de re-ouvrir la vidéo pour la boucle";
+                m_videoTimer.stop();
+                return;
+            }
+
+            if (!m_videoCapture.read(frame) || frame.empty()) {
+                qWarning() << "Impossible de lire la première frame après réouverture";
+                m_videoTimer.stop();
+                return;
+            }
+        } else {
+            // Pas de boucle -> on s'arrête
+            m_videoTimer.stop();
+            m_videoCapture.release();
+            m_videoPaused = true;
+            if (m_btnVideoPlayPause) {
+                m_btnVideoPlayPause->setChecked(true);
+                m_btnVideoPlayPause->setIcon(
+                    style()->standardIcon(QStyle::SP_MediaPlay)
+                    );
+            }
+            return;
+        }
+    }
+
+    QImage img = matToQImage(frame);
+    if (img.isNull()) {
+        qWarning() << "Conversion Mat -> QImage échouée pour la vidéo.";
+        return;
+    }
+
+    // On met la frame comme image source et on applique le pipeline
+    m_imageSource = img;
+    mettreAJourImageApresPipeline();
+}
+
+
+void MainWindow::onVideoPlayPauseClicked()
+{
+    if (!m_videoCapture.isOpened())
+        return;
+
+    // Bouton checké = en pause
+    m_videoPaused = m_btnVideoPlayPause->isChecked();
+
+    if (m_videoPaused) {
+        // Icône "play"
+        m_btnVideoPlayPause->setIcon(
+            style()->standardIcon(QStyle::SP_MediaPlay)
+            );
+    } else {
+        // Icône "pause"
+        m_btnVideoPlayPause->setIcon(
+            style()->standardIcon(QStyle::SP_MediaPause)
+            );
+
+        // Si le timer était arrêté (par exemple après la fin sans boucle),
+        // on le relance.
+        if (!m_videoTimer.isActive()) {
+            double fps = m_videoCapture.get(cv::CAP_PROP_FPS);
+            int intervalMs = 33;
+            if (fps > 1.0)
+                intervalMs = static_cast<int>(1000.0 / fps);
+            m_videoTimer.start(intervalMs);
+        }
+    }
+}
+
+
+
+void MainWindow::recentrerBoutonVideo()
+{
+    if (!m_btnVideoPlayPause || !ui->labelPreview)
+        return;
+
+    const int bw = m_btnVideoPlayPause->width();
+    const int bh = m_btnVideoPlayPause->height();
+
+    const int lx = ui->labelPreview->width() / 2 - bw / 2;
+    const int ly = ui->labelPreview->height() / 2 - bh / 2;
+
+    m_btnVideoPlayPause->move(lx, ly);
+    m_btnVideoPlayPause->raise();
+}
+
+
+
+void MainWindow::afficherCredits()
+{
+    QString texte = R"(
+        <h2>VisionBox</h2>
+
+        <p><b>Équipe projet :</b></p>
+
+        <p>
+        • <b>LALEYE Miguel</b><br>
+        &nbsp;&nbsp;Email : <a href="mailto:richedorlaleye@gmail.com">richedorlaleye@gmail.com</a><br>
+        &nbsp;&nbsp;GitHub : <a href="https://github.com/Richedor">https://github.com/Richedor</a>
+        </p>
+
+        <p>
+        • <b>Kourouma Karinkan</b>
+        </p>
+
+        <p>
+        • <b>GOWAN OGOWAN Sergia</b><br>
+        &nbsp;&nbsp;Email : <a href="mailto:gowansergia@gmail.com">gowansergia@gmail.com</a><br>
+        &nbsp;&nbsp;GitHub : <a href="https://github.com/Flo-sergia">https://github.com/Flo-sergia</a>
+        </p>
+
+        <p>
+        • <b>SAMBA Thécia</b>
+        </p>
+
+        <p>
+        • <b>Samake Cheick Oumar</b><br>
+        &nbsp;&nbsp;Email : <a href="mailto:cheickoumarsamake24@gmail.com">cheickoumarsamake24@gmail.com</a>
+        </p>
+
+        <p>
+        • <b>IBNNASR Manal</b><br>
+        &nbsp;&nbsp;Email : <a href="mailto:bennasrmanel1@gmail.com">bennasrmanel1@gmail.com</a><br>
+        &nbsp;&nbsp;GitHub : <a href="https://github.com/Manel1103">https://github.com/Manel1103</a>
+        </p>
+
+        <p>
+        • <b>DJAKBARA HINSOU Roger</b><br>
+        &nbsp;&nbsp;Email : <a href="mailto:djakbararoger@gmail.com">djakbararoger@gmail.com</a><br>
+        &nbsp;&nbsp;GitHub : <a href="https://github.com/Hinsou-Pirkloss">https://github.com/Hinsou-Pirkloss</a>
+        </p>
+
+        <br>
+
+        <p><b>Encadrant :</b></p>
+
+        <p>
+        • <b>Johel MITERAN</b> (Professeur, Université de Bourgogne)<br>
+        &nbsp;&nbsp;GitHub : <a href="https://github.com/Karleener">https://github.com/Karleener</a>
+        </p>
+    )";
+
+    QMessageBox box;
+    box.setWindowTitle("Crédits VisionBox");
+    box.setTextFormat(Qt::RichText);           // Permet HTML + liens cliquables
+    box.setText(texte);
+    box.setStandardButtons(QMessageBox::Ok);
+    box.exec();
+}
+
+
+
+
+
+
 void MainWindow::appliquerStyleVisionBox()
 {
     if (!ui->page_2_Display)
@@ -911,6 +1569,44 @@ void MainWindow::appliquerStyleVisionBox()
            Fond clair :#FFF6D8
            Fond panel :#FFFCF5
         ****************************************/
+
+        /************** PAGE D’ACCUEIL **************/
+        QWidget#page_0_Welcome {
+            background-color: #FFF6D8;
+        }
+
+        QLabel#welcomeTitle {
+            color: #88421D;
+            font-size: 32px;
+            font-weight: 700;
+            font-family: "Segoe UI", "Arial";
+        }
+
+        QLabel#welcomeSub {
+            color: #5F2D13;
+            font-size: 16px;
+            font-weight: 400;
+            qproperty-alignment: AlignHCenter;
+        }
+
+        QPushButton#btnCommencer {
+            background-color: #88421D;
+            color: white;
+            border-radius: 20px;
+            padding: 10px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+        }
+
+        QPushButton#btnCommencer:hover {
+            background-color: #A85B2E;
+        }
+
+        QPushButton#btnCommencer:pressed {
+            background-color: #5F2D13;
+        }
+
 
         /* ====== FOND PAGE ====== */
         QWidget#page_2_Display {
@@ -1145,15 +1841,31 @@ void MainWindow::appliquerStyleVisionBox()
             background-color: #ffeef4;
         }
 
-        /* Labels de la fenêtre de paramètres (flou, etc.) */
-        QDialog QLabel[role="titreParametresTraitement"],
-        QDialog QLabel[role="nomParametreTraitement"],
-        QDialog QLabel[role="valeurParametreTraitement"] {
+        /* Texte des fenêtres de paramètres (flou, miroir, invertcolor, contours, etc.) */
+        QDialog QLabel,
+        QDialog QCheckBox,
+        QDialog QRadioButton {
             color: #333333;
         }
 
 
+        QPushButton[role="chipMove"] {
+            background-color: #88421D;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 9px;
+            font-size: 10px;
+            padding: 0;
+        }
+
+        QPushButton[role="chipMove"]:hover {
+            background-color: #A85B2E;
+        }
+
+        QPushButton[role="chipMove"]:pressed {
+            background-color: #5F2D13;
+        }
+
 
     )");
 }
-
