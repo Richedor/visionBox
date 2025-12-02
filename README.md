@@ -39,6 +39,7 @@ doc/
     Cahier_des_charges.md
     Manuel_utilisateur.pdf
     presentationVisionBox.pdf
+    modelisationVisionBox.pdf
 
 release/
     VisionBox.exe      → Application Windows prête à l’emploi
@@ -87,7 +88,7 @@ Ouvrir `CMakeLists.txt` avec Qt Creator, configurer un kit, puis compiler.
 
 <br>
 
-## 👥 Travail en équipe
+##  Travail en équipe
 
 * **Interface graphique** (Qt Widgets, affichage, boîtes)
 * **Traitements OpenCV & chaîne de traitement**
