@@ -52,6 +52,8 @@ Si vous compilez le projet :
 
 ## 3. Interface générale
 
+<img width="1920" height="1032" alt="InterfaceGeneral" src="https://github.com/user-attachments/assets/df3009f2-0fcc-4832-9eca-3e0f0eb41a59" />
+
 L’interface VisionBox se compose de plusieurs zones :
 
 1. **Barre d’outils** (haut)
@@ -94,6 +96,9 @@ L’interface VisionBox se compose de plusieurs zones :
 
 VisionBox propose trois modes d’acquisition.
 
+<img width="1104" height="632" alt="EcranAcquisition" src="https://github.com/user-attachments/assets/daa2be4b-3d4e-4d39-bcaf-e791ff71a197" />
+
+
 ---
 
 ### 4.1 Depuis un fichier image
@@ -108,6 +113,8 @@ L’image chargée devient la **source** du pipeline.
 ---
 
 ### 4.2 Depuis une webcam
+
+<img width="642" height="512" alt="webcam" src="https://github.com/user-attachments/assets/2358f373-b900-4863-8eac-a89a1537bc00" />
 
 1. Cliquer sur **“Webcam”**.
 2. Une fenêtre dédiée s’ouvre.
@@ -178,6 +185,8 @@ La boîte correspondante disparaît du pipeline et le résultat final est recalc
 Chaque boîte dispose d’un bouton **Paramètres**.
 
 ### Pour régler un traitement :
+
+<img width="362" height="432" alt="ParametreContour" src="https://github.com/user-attachments/assets/f0970555-a4ca-4731-beb5-cd1d21ff92b3" />
 
 1. Cliquer sur le bouton **Paramètres** dans la boîte.
 2. Une fenêtre s’ouvre contenant :
@@ -282,7 +291,7 @@ Les logs sont mis à jour automatiquement.
 
 ## 13. À propos
 
-* Projet universitaire M1 EEA/TSI
+* Projet universitaire
 * Réalisé en équipe (traitements + interface + gestion projet)
 * Développé avec Qt 6, C++17 et OpenCV 4.x
 
